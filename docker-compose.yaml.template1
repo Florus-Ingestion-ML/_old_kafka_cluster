@@ -12,7 +12,7 @@ services:
       - "9093:9093"
       - "9101:9101"
     environment:
-      KAFKA_NODE_ID: 3
+      KAFKA_NODE_ID: 1
       KAFKA_JMX_PORT: 9101
       KAFKA_JMX_HOSTNAME: '127.0.0.1'
       KAFKA_PROCESS_ROLES: 'broker,controller'
@@ -26,10 +26,24 @@ services:
       KAFKA_DEFAULT_REPLICATION_FACTOR: 3
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
       KAFKA_NUM_PARTITIONS: 6
-      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@192.168.56.10:9093,2@192.168.56.11:9093,3@192.168.56.12:9093'
+      KAFKA_CONTROLLER_QUORUM_VOTERS: '1@${IP1}:9093,2@${IP2}:9093,3@${IP3}:9093'
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
-      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://broker:29092,PLAINTEXT_HOST://192.168.56.12:9092'
+      KAFKA_ADVERTISED_LISTENERS: 'PLAINTEXT://broker:29092,PLAINTEXT_HOST://${IP1}:9092'
       KAFKA_LISTENERS: 'PLAINTEXT://broker:29092,CONTROLLER://broker:9093,PLAINTEXT_HOST://0.0.0.0:9092'
+    restart: always
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:7.5.0
+    hostname: schema-registry
+    container_name: schema-registry
+    depends_on:
+      - broker
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'PLAINTEXT://broker:29092,PLAINTEXT_HOST://1${IP1}:9092,PLAINTEXT_HOST://${IP2}:9092,PLAINTEXT_HOST://${IP3}:9092'
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
     restart: always
 
   kafka-connect:
@@ -39,10 +53,10 @@ services:
     restart: always
     ports:
       - "8083:8083"
-    # volumes:
-    #   - ./etc/jars:/etc/kafka-connect/jars
+    volumes:
+      - ./etc/jars:/etc/kafka-connect/jars
     environment:
-      CONNECT_BOOTSTRAP_SERVERS: 'PLAINTEXT://broker:29092,PLAINTEXT_HOST://192.168.56.10:9092,PLAINTEXT_HOST://192.168.56.11:9092,PLAINTEXT_HOST://192.168.56.12:9092'
+      CONNECT_BOOTSTRAP_SERVERS: 'PLAINTEXT://broker:29092,PLAINTEXT_HOST://${IP1}:9092,PLAINTEXT_HOST://${IP2}:9092,PLAINTEXT_HOST://${IP3}:9092'
       CONNECT_REST_ADVERTISED_HOST_NAME: kafka-connect
       CONNECT_REST_ADVERTISED_LISTENER: http
       CONNECT_REST_ADVERTISED_PORT: 8083
@@ -56,11 +70,26 @@ services:
       CONNECT_CONFLUENT_TOPIC_REPLICATION_FACTOR: 3
       CONNECT_KEY_CONVERTER: "io.confluent.connect.avro.AvroConverter"
       CONNECT_VALUE_CONVERTER: "io.confluent.connect.avro.AvroConverter"
-      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: "http://192.168.56.10:8081"
-      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: "http://192.168.56.10:8081"
+      CONNECT_KEY_CONVERTER_SCHEMA_REGISTRY_URL: "http://${IP1}:8081"
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: "http://${IP1}:8081"
       CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
       CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
-      CONNECT_PLUGIN_PATH: '/usr/share/java'
-      # CONNECT_PLUGIN_PATH: '/usr/share/java, /etc/kafka-connect/jars'
+      CONNECT_PLUGIN_PATH: '/usr/share/java, /etc/kafka-connect/jars'
     depends_on:
       - broker
+      - schema-registry
+
+  # rest-proxy:
+  #   image: confluentinc/cp-kafka-rest:7.5.0
+  #   depends_on:
+  #     - broker
+  #     - schema-registry
+  #   ports:
+  #     - 8082:8082
+  #   hostname: rest-proxy
+  #   container_name: rest-proxy
+  #   environment:
+  #     KAFKA_REST_HOST_NAME: rest-proxy
+  #     KAFKA_REST_BOOTSTRAP_SERVERS: 'broker:29092'
+  #     KAFKA_REST_LISTENERS: "http://0.0.0.0:8082"
+  #     KAFKA_REST_SCHEMA_REGISTRY_URL: 'http://schema-registry:8081'
