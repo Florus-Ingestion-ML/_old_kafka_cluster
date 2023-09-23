@@ -1,0 +1,15 @@
+global:
+  slack_api_url: 'https://hooks.slack.com/services/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'
+
+route:
+  group_by: ['alertname']
+  group_wait: 10s
+  group_interval: 10s
+  repeat_interval: 3600s
+  receiver: 'slack-channel'
+
+receivers:
+- name: 'slack-channel'
+  slack_configs:
+    - channel: '#monitoring_test'
+      text: "<!channel> \nsummary: {{ .CommonAnnotations.summary }}\ndescription: {{ .CommonAnnotations.description }}"

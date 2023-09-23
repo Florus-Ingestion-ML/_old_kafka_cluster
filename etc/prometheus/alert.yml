@@ -1,0 +1,11 @@
+groups:
+  - name: targets
+    rules:
+      - alert: Leader
+        expr: kafka_server_raft_metrics_current_leader == 1
+        for: 5s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Be leader"
+          description: "Leader controller"

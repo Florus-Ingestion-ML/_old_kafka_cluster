@@ -9,6 +9,8 @@ services:
     ports:
       - "9092:9092"
       - "9101:9101"
+    volumes:
+      - ./jmx-exporter:/usr/share/jmx_exporter
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: 'CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT'
@@ -19,17 +21,17 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: broker:29092
       KAFKA_JMX_PORT: 9101
-      # KAFKA_JMX_HOSTNAME: 0.0.0.0
-      # KAFKA_JMX_OPTS: -Djava.rmi.server.hostname=127.0.0.1 -Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false
       KAFKA_PROCESS_ROLES: 'broker,controller'
       KAFKA_CONTROLLER_QUORUM_VOTERS: '1@broker:29093'
       KAFKA_LISTENERS: 'PLAINTEXT://broker:29092,CONTROLLER://broker:29093,PLAINTEXT_HOST://0.0.0.0:9092'
       KAFKA_INTER_BROKER_LISTENER_NAME: 'PLAINTEXT'
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
-      # Replace CLUSTER_ID with a unique base64 UUID using "bin/kafka-storage.sh random-uuid" 
-      # See https://docs.confluent.io/kafka/operations-tools/kafka-tools.html#kafka-storage-sh
       CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      # EXTRA_ARGS:
+      #   -javaagent:/usr/share/jmx-exporter/jmx_prometheus_javaagent-0.20.0.jar=1234:/usr/share/jmx-exporter/zookeeper.yml
+      #   -javaagent:/usr/share/jmx-exporter/jolokia-jvm-1.7.1.jar=port=1235,host=*
+      #   -Djava.util.logging.config.file=/usr/share/jmx-exporter/exporter_debug_logging.properties
 
   prometheus:
     image: prom/prometheus:v2.47.0
@@ -53,20 +55,32 @@ services:
     container_name: jmx-kafka
     depends_on:
      - broker
-  
-  grafana:
-    image: grafana/grafana:10.1.2
-    ports:
-     - "3000:3000"
-    environment:
-      GF_PATHS_DATA : /var/lib/grafana
-      GF_SECURITY_ADMIN_PASSWORD : kafka
+
+  alertmanager:
+    image: quay.io/prometheus/alertmanager
     volumes:
-     - ./grafana/provisioning:/etc/grafana/provisioning
-     - ./grafana/dashboards:/var/lib/grafana/dashboards
-    container_name: grafana
-    depends_on:
-     - prometheus
+      - ./etc/alertmanager/:/etc/alertmanager/
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    ports:
+      - 9093:9093
+    restart: always
+    tty: true
+  
+  # grafana:
+  #   image: grafana/grafana:10.1.2
+  #   ports:
+  #    - "3000:3000"
+  #   environment:
+  #     GF_PATHS_DATA : /var/lib/grafana
+  #     GF_SECURITY_ADMIN_PASSWORD : kafka
+  #   volumes:
+  #    - ./grafana/provisioning:/etc/grafana/provisioning
+  #    - ./grafana/dashboards:/var/lib/grafana/dashboards
+  #   container_name: grafana
+  #   depends_on:
+  #    - prometheus
 
   # schema-registry:
   #   image: confluentinc/cp-schema-registry:7.5.0
